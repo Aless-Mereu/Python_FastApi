@@ -1,11 +1,9 @@
-
-from datetime import datetime
-from fastapi import FastAPI, Query, Body, HTTPException,Path,status,Depends
+from fastapi import FastAPI, Query, HTTPException,Path,status,Depends
 from pydantic import BaseModel, Field, field_validator,EmailStr,ConfigDict
 from typing import Optional,List,Union,Literal
 from math import ceil
-from sqlalchemy import create_engine, Integer, String,Text, DateTime,select,func,UniqueConstraint,ForeignKey,Table,Column
-from sqlalchemy.orm import sessionmaker,Session,DeclarativeBase, Mapped, mapped_column,relationship,selectinload,joinedload
+from sqlalchemy import select,func
+from sqlalchemy.orm import Session,selectinload,joinedload
 from sqlalchemy.exc import SQLAlchemyError,IntegrityError
 from dotenv import load_dotenv
 
@@ -14,54 +12,12 @@ from dotenv import load_dotenv
 #-----------CONFIGURACIÓN PARA BASE DE DATOS-----------------------------
 load_dotenv()
 
-post_tags = Table(
-    "post_tags",
-    Base.metadata,
-    Column("post_id", ForeignKey
-           ("posts.id", ondelete="CASCADE"), primary_key=True),
-    Column("tag_id", ForeignKey
-           ("tags.id", ondelete="CASCADE"), primary_key=True)
-)
 
 
-class AuthorORM(Base):
-    __tablename__ = "authors"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    name: Mapped[str] = mapped_column(String(100), nullable=False)
-    email: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
-    posts: Mapped[List["PostORM"]] = relationship(back_populates="author")
 
 
-class TagsORM(Base):
-    __tablename__ = "tags"
-    id:Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    name:Mapped[str] = mapped_column(String(30), nullable=False, unique=True, index=True)
-
-    posts: Mapped[List["PostORM"]] = relationship(
-        secondary=post_tags,
-        back_populates="tags",
-        lazy ="selectin" #mejor optimizado
-    )
 
 
-class PostORM(Base):
-    __tablename__ = "posts"
-    __table_args__ = (UniqueConstraint("title", name="unique_post_title"),) 
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    title: Mapped[str] = mapped_column(String(100),nullable=False, index=True)
-    content: Mapped[str] = mapped_column(Text, nullable=False)
-    created_at:Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
-
-    author_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("authors.id"))
-    author: Mapped[Optional[AuthorORM]] = relationship(back_populates="posts")
-
-    tags: Mapped[List[TagsORM]] = relationship(
-        secondary=post_tags,
-        back_populates="posts",
-        lazy ="selectin", #mejor optimizado
-        passive_deletes=True
-    )
 
 
 
@@ -78,98 +34,7 @@ app = FastAPI(title= "Mini blog")
 
 #---------------------------------------------------CLASES---------------------------------------------------------------------------
 
-class Tag (BaseModel):
-    name: str = Field(..., min_length=2, max_length=30, description="Nombre de la etiqueta")
 
-    model_config = ConfigDict(from_attributes=True)# acepta objetos del ORM
-
-
-
-
-class Author(BaseModel):
-    name:str
-    email:EmailStr
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-
-class PostBase(BaseModel):
-    title: str
-    content: str
-    #content: Optional[str]="Contenido no disponible"
-    tags: Optional[List[Tag]] = Field(default_factory=list) #crea una lista vacía pero asegura crear una lista por cada objeto
-    author: Optional[Author] = None
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-
-
-class PostCreate(BaseModel):
-    title: str = Field(
-        ...,
-        min_length=3,
-        max_length=100,
-        description="Título de del Post (mínimo 3 caractéres y máximo 100)",
-        examples=["Mi primer post con FastAPI"]
-
-    )
-    content: Optional[str] = Field(
-        default="Contenido no disponible",
-        min_length=10,
-        description="Mínimo 10 caracteres",
-        examples=["Este es un contenido válido porque tiene 10 caracteres  o más"]
-    )
-
-    tags: List[Tag] = Field(default_factory=list)
-    author: Optional[Author] = None
-
-    @field_validator("title") #evalua el campo title
-    @classmethod #acceso a la clase completa
-    def not_allowed_title(cls, value:str)-> str:
-        palabras_prohibidas = ["porn", "xxx", "spam"]
-        for palabra in palabras_prohibidas:
-            if palabra in value.lower():
-                raise ValueError("El título no puede contener la palabra: " + palabra)
-        return value
-
-
-class PostUpdate(BaseModel):
-    title: Optional[str] = Field(
-        None,
-        min_length=3,
-        max_length=100) 
-    content: Optional[str] = None #el campo se vuelve opcional
-
-
-class PostPublic(PostBase):
-    id: int
-
-    model_config = ConfigDict(from_attributes=True)#convierte a Json
-   
-
-
-class PostSummary(BaseModel):
-    id: int
-    title: str
-
-    model_config = ConfigDict(from_attributes=True) #también vamos a validar objetos
-
-
-
-
-class PaginatedPost (BaseModel):
-    page: int
-    per_page: int
-    total: int
-    total_pages: int
-    has_prev: bool
-    has_next: bool
-    order_by: Literal["id","title"]
-    direction: Literal["asc", "desc"]
-    search: Optional[str]=None
-    items: List[PostPublic]
 
 
 #------------------------------------------------Servicios / Helpers-------------------------------------------------------------------------
@@ -242,44 +107,38 @@ def list_posts(
     db: Session = Depends(get_db)
 ):
     
-    results = select(PostORM)
+    # results = select(PostORM)
 
-    query = query or text # Mala práctica, es sólo un ejemplo
+    # query = query or text 
+    
+    # if query: 
+    #     results = results.where(PostORM.title.ilike(f"{query}%"))
+
+    # total = db.scalar(select(func.count())
+    #                   .select_from(results.subquery())) or 0
+    
+    # total_pages = ceil(total/per_page) if total > 0 else 0
+
+    # if total_pages == 0:
+    #     current_page = 1
+    # else:
+    #     current_page = min(page, total_pages)
     
 
-#query params
-    if query: 
-        results = results.where(PostORM.title.ilike(f"{query}%"))
-
-    total = db.scalar(select(func.count())
-                      .select_from(results.subquery())) or 0
+    # if order_by == "id":
+    #     order_col = PostORM.id
+    # else:
+    #     order_col = PostORM.title
     
-    total_pages = ceil(total/per_page) if total > 0 else 0
-
-    if total_pages == 0:
-        current_page = 1
-    else:
-        current_page = min(page, total_pages)
-
-     # results =sorted(
-    #     results, key=lambda post: post[order_by],
-    #     reverse=(direction == "desc"))
-    
-
-    if order_by == "id":
-        order_col = PostORM.id
-    else:
-        order_col = PostORM.title
-    
-    results = results.order_by(order_col.asc() if direction == "asc" else order_col.desc())
+    # results = results.order_by(order_col.asc() if direction == "asc" else order_col.desc())
 
     
 
-    if total_pages == 0:
-        items = []
-    else:
-        start = (current_page-1)*per_page
-        items = db.execute(results.offset(start).limit(per_page)).scalars().all()
+    # if total_pages == 0:
+    #     items = []
+    # else:
+    #     start = (current_page-1)*per_page
+    #     items = db.execute(results.offset(start).limit(per_page)).scalars().all()
 
     has_prev = current_page > 1
     has_next = current_page < total_pages if total_pages > 0 else False
@@ -329,20 +188,20 @@ def filter_by_tags(
     db: Session = Depends(get_db)
 
 ):
-    normalized_tag_names = [tag.strip().lower() for tag in tags if tag.strip()]
-    if not normalized_tag_names:
-        return []
+    # normalized_tag_names = [tag.strip().lower() for tag in tags if tag.strip()]
+    # if not normalized_tag_names:
+    #     return []
     
-    post_list= (
-        select(PostORM)
-        .options(
-            selectinload(PostORM.tags),#evita el n+1 al serializar, crea una query para los post y después para las demás etiquetas
-            joinedload(PostORM.author)
-        ).where(PostORM.tags.any(func.lower(TagsORM.name).in_(normalized_tag_names)))
-        .order_by(PostORM.created_at.asc()
-        )
-    )
-    post =db.execute(post_list).scalars().all()
+    # post_list= (
+    #     select(PostORM)
+    #     .options(
+    #         selectinload(PostORM.tags),#evita el n+1 al serializar, crea una query para los post y después para las demás etiquetas
+    #         joinedload(PostORM.author)
+    #     ).where(PostORM.tags.any(func.lower(TagsORM.name).in_(normalized_tag_names)))
+    #     .order_by(PostORM.created_at.asc()
+    #     )
+    # )
+    # post =db.execute(post_list).scalars().all()
     return post
     
 
