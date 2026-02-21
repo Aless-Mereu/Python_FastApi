@@ -90,7 +90,7 @@ class PostRepository:
         ).scalar_one_or_none())
 
        if tag_obj:
-            return tag_obj
+            return tag_obj                                                                        
         
        tag_obj = TagsORM(name=name)
        self.db.add(tag_obj)
@@ -98,6 +98,33 @@ class PostRepository:
        return tag_obj
 
 
+    def create_post(self, title:str, content:str,author:Optional[dict],tags:List) -> PostORM:
+        author_obj = None
+        if author:
+            author_obj = self.ensure_author(author["name"],author["email"])
+        post = PostORM(title=title,content=content,author=author_obj)
+        
+        for tag in tags:
+            tag_obj = self.ensure_tag(tag["name"])
+            post.tags.append(tag_obj)
+        
+        self.db.add(post)
+        self.db.commit()
+        self.db.refresh(post)
+        return post
 
-    
+
+    def update_post(self, post: PostORM, updates: dict) -> PostORM:
+        for key, value in updates.items():
+            setattr(post, key, value)
+
+        self.db.add(post)
+        self.db.refresh(post)
+        return post
+        
+
+    def delete_post(self, post: PostORM)-> None:
+        self.db.delete(post)
+        
+
         
