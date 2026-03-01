@@ -7,6 +7,8 @@ class Tag(BaseModel):
     name: str = Field(..., min_length=2, max_length=30,
                       description="Nombre de la etiqueta")
 
+    # ConfigDict(from_attributes=True): Antes conocido como 'orm_mode'.
+    # Permite que Pydantic lea datos de objetos ORM (ej. post.title) y no solo de diccionarios (post['title']).
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -26,6 +28,7 @@ class PostBase(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+# Esquema para CREAR un post (Input del usuario).
 class PostCreate(BaseModel):
     title: str = Field(
         ...,
@@ -43,6 +46,8 @@ class PostCreate(BaseModel):
     tags: List[Tag] = Field(default_factory=list)  # []
     author: Optional[Author] = None
 
+    # Validador personalizado.
+    # Se ejecuta automáticamente cuando Pydantic procesa el campo 'title'.
     @field_validator("title")
     @classmethod
     def not_allowed_title(cls, value: str) -> str:
@@ -51,14 +56,15 @@ class PostCreate(BaseModel):
         return value
 
 
+# Esquema para ACTUALIZAR (PATCH/PUT). Todos los campos son opcionales.
 class PostUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=3, max_length=100)
     content: Optional[str] = None
 
 
+# Esquema para RESPUESTA completa (Output al cliente).
 class PostPublic(PostBase):
     id: int
-
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -69,6 +75,7 @@ class PostSummary(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+# Esquema para respuesta PAGINADA.
 class PaginatedPost(BaseModel):
     page: int
     per_page: int

@@ -5,15 +5,18 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from typing import List, Optional, Union, Literal
 from app.core.db import get_db
-from .schemas import (PostPublic, PaginatedPost,
-                      PostCreate, PostUpdate, PostSummary)
+from .schemas import PostPublic, PaginatedPost, PostCreate, PostUpdate, PostSummary
 from .repository import PostRepository
+from app.core.security import oauth2_scheme
 
 router = APIRouter(prefix="/posts", tags=["posts"])
+# APIRouter: Agrupa rutas relacionadas.
+# prefix="/posts": Todas las rutas aquí empezarán con /posts (ej. /posts/by-tags).
 
 
 @router.get("", response_model=PaginatedPost)
 def list_posts(
+    # Query Parameters (?text=...&page=...)
     text: Optional[str] = Query(
         default=None,
         deprecated=True,
@@ -41,17 +44,22 @@ def list_posts(
     direction: Literal["asc", "desc"] = Query(
         "asc", description="Dirección de orden"
     ),
+    # Inyección de Dependencia: Obtiene la sesión de BD creada en get_db
     db: Session = Depends(get_db)
 ):
+    # Instancia el repositorio pasándole la sesión de BD
     repository = PostRepository(db)
     query = query or text
 
+    # Llama a la lógica de búsqueda del repositorio
     total, items = repository.search(
         query, order_by, direction, page, per_page)
 
+    # Cálculos matemáticos para la paginación
     total_pages = ceil(total/per_page) if total > 0 else 0
     current_page = 1 if total_pages == 0 else min(page, total_pages)
 
+    # Determina si hay páginas previas o siguientes para la UI
     has_prev = current_page > 1
     has_next = current_page < total_pages if total_pages > 0 else False
 
@@ -84,6 +92,7 @@ def filter_by_tags(
 
 @router.get("/{post_id}", response_model=Union[PostPublic, PostSummary], response_description="Post encontrado")
 def get_post(post_id: int = Path(
+    # Path Parameter: Valida que sea parte de la URL (/posts/1)
     ...,
     ge=1,
     title="ID del post",
@@ -97,6 +106,7 @@ def get_post(post_id: int = Path(
     if not post:
         raise HTTPException(status_code=404, detail="Post no encontrado")
 
+    # Lógica condicional: Devuelve un esquema diferente según el parámetro include_content
     if include_content:
         return PostPublic.model_validate(post, from_attributes=True)
 
@@ -107,16 +117,20 @@ def get_post(post_id: int = Path(
 def create_post(post: PostCreate, db: Session = Depends(get_db)):
     repository = PostRepository(db)
     try:
+        # Convierte los modelos Pydantic a diccionarios para pasarlos al repositorio
         post = repository.create_post(
             title=post.title,
             content=post.content,
             author=(post.author.model_dump() if post.author else None),
             tags=[tag.model_dump() for tag in post.tags],
         )
+        # Commit: Guarda permanentemente los cambios en la BD.
+        # Si falla algo antes de aquí, nada se guarda.
         db.commit()
         db.refresh(post)
         return post
     except IntegrityError:
+        # Rollback: Deshace cualquier cambio pendiente si hubo error (ej. título duplicado)
         db.rollback()
         raise HTTPException(
             status_code=409, detail="El título ya existe, prueba con otro")
@@ -161,3 +175,8 @@ def delete_post(post_id: int, db: Session = Depends(get_db)):
         db.rollback()
         raise HTTPException(
             status_code=500, detail="Error al eliminar el post")
+        
+
+@router.get("/secure")
+def secure_endpoint(token: str = Depends(oauth2_scheme)):
+    return {"message": "Acceso con token", "token_recibido": token}

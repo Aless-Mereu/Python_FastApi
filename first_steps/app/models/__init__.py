@@ -1,10 +1,10 @@
 from .author import AuthorORM
-from .post import PostORM
-from .tag import TagsORM,post_tags
+from .post import PostORM, post_tags
+from .tag import TagORM
 
 __all__ = [
     "AuthorORM",
     "PostORM",
-    "TagsORM",
+    "TagORM",
     "post_tags"
 ] #se puede usar para que no importe todos los paquetes, solo se importa lo de la lista
