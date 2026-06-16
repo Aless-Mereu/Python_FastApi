@@ -4,7 +4,7 @@ from typing import Optional
 from fastapi.security import OAuth2PasswordBearer
 import jwt
 from fastapi import Depends, HTTPException, status
-from jwt import ExpiredSignatureError, InvalidTokenError
+from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
 
 
 # Configuración de seguridad.
@@ -71,5 +71,5 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
         return {"email": sub, "username": username}
     except ExpiredSignatureError:
         raise raise_expired_token()
-    except jwt.InvalidTokenError:
+    except InvalidTokenError:
         raise credentials_exc

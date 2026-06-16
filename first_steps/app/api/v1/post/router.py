@@ -4,10 +4,10 @@ from fastapi import APIRouter, Query, Depends, Path, status, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from typing import List, Optional, Union, Literal
-from app.core.db import get_db
+from app.core.db import get_db, Base
 from .schemas import PostPublic, PaginatedPost, PostCreate, PostUpdate, PostSummary
 from .repository import PostRepository
-from app.core.security import oauth2_scheme,get_current_user
+from app.core.security import get_current_user
 
 
 router = APIRouter(prefix="/posts", tags=["posts"])
@@ -98,7 +98,7 @@ def get_post(post_id: int = Path(
     ge=1,
     title="ID del post",
     description="Identificador entero del post. Debe ser mayor a 1",
-    example=1
+    examples=[1]
 ), include_content: bool = Query(default=True, description="Incluir o no el contenido"), db: Session = Depends(get_db)):
 
     repository = PostRepository(db)
@@ -109,9 +109,9 @@ def get_post(post_id: int = Path(
 
     # Lógica condicional: Devuelve un esquema diferente según el parámetro include_content
     if include_content:
-        return PostPublic.model_validate(post, from_attributes=True)
+        return post
 
-    return PostSummary.model_validate(post, from_attributes=True)
+    return post
 
 
 @router.post("", response_model=PostPublic, response_description="Post creado (OK)", status_code=status.HTTP_201_CREATED)
@@ -149,6 +149,13 @@ def update_post(post_id: int, data: PostUpdate, db: Session = Depends(get_db),us
     if not post:
         raise HTTPException(status_code=404, detail="Post no encontrado")
 
+    # 🔒 FIX DE SEGURIDAD: Verificar que el usuario actual es el autor del post.
+    # El post puede no tener autor si fue creado antes de implementar la autenticación.
+    if post.author and post.author.email != user['email']:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes permiso para modificar este post"
+        )
     try:
         updates = data.model_dump(exclude_unset=True)
         post = repository.update_post(post, updates)
@@ -169,6 +176,13 @@ def delete_post(post_id: int, db: Session = Depends(get_db), user = Depends(get_
     if not post:
         raise HTTPException(status_code=404, detail="Post no encontrado")
 
+    # 🔒 FIX DE SEGURIDAD: Verificar que el usuario actual es el autor del post.
+    if post.author and post.author.email != user['email']:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes permiso para eliminar este post"
+        )
+
     try:
         repository.delete_post(post)
         db.commit()
@@ -176,8 +190,3 @@ def delete_post(post_id: int, db: Session = Depends(get_db), user = Depends(get_
         db.rollback()
         raise HTTPException(
             status_code=500, detail="Error al eliminar el post")
-        
-
-@router.get("/secure")
-def secure_endpoint(token: str = Depends(oauth2_scheme)):
-    return {"message": "Acceso con token", "token_recibido": token}

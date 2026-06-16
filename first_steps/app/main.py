@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 from app.api.v1.post.router import router as post_router
 # Si el archivo auth/router.py no existe, comenta la siguiente línea:
 from app.api.v1.auth.router import router as auth_router
+from app.api.v1.uploads.router import router as uploads_router
 
 load_dotenv()
 
@@ -20,6 +21,8 @@ def create_app() -> FastAPI:
     # Registra las rutas definidas en el router de autenticación
     # Si auth_router no está definido, comenta la siguiente línea:
     app.include_router(auth_router, prefix="/api/v1")
+    
+    app.include_router(uploads_router)
 
     return app
 
