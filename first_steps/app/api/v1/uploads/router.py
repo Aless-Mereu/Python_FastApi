@@ -3,6 +3,7 @@ import shutil
 from uuid import uuid4
 import uuid
 from fastapi import APIRouter, HTTPException, UploadFile, File
+from app.services.file_storages import save_upload_image, endure_media_dir
 
 
 MEDIA_DIR = "app/media"  # Carpeta donde se guardarán los archivos subidos
@@ -27,17 +28,10 @@ async def upload_file(file: UploadFile = File(...)):
     
 @router.post("/save")
 async def save_file(file: UploadFile = File(...)):
-    if file.content_type not in ["image/jpeg", "image/png"]:
-        raise HTTPException(status_code=400, detail="Tipo de archivo no permitido. Solo se permiten imágenes JPEG y PNG.")
-        
-    ext = os.path.splitext(file.filename)[1]  # Obtiene la extensión del archivo (.ej. .jpg, .png)
-    filename = f"{uuid.uuid4().hex}{ext}"  # Genera un nombre único para el archivo
-    file_path = os.path.join(MEDIA_DIR, filename)
+    saved = await save_upload_image(file)
     
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)  # Guarda el archivo en la carpeta media
-        return {
-            "filename": filename,
-            "content-type": file.content_type,
-            "url": f"/media/{filename}"  # URL para acceder al archivo subido
+    return {
+            "filename": saved["filename"],
+            "content-type": saved["content-type"],
+            "url": saved["url"]
         }
