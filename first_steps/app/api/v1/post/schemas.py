@@ -57,6 +57,8 @@ class PostCreate(BaseModel):
             raise ValueError("El título no puede contener la palabra: 'spam'")
         return value
     
+    
+    #Traductor que permite validacones de formularios HTML (FormData) en lugar de JSON.
     @classmethod
     def as_form(
         cls,
